@@ -68,6 +68,11 @@ python pms.py
 
 ### 4. Run the Receptionist
 
+**Interactive Streamlit Web Dashboard (Voice & Text GUI):**
+```bash
+streamlit run app.py
+```
+
 **Interactive Text CLI:**
 ```bash
 python agent.py
