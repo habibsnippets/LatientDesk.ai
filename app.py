@@ -121,8 +121,13 @@ def clean_text_for_speech(text: str) -> str:
     # Remove raw database slot IDs like '1-20260914-0900'
     text = re.sub(r"\b(?:slot\s*(?:id)?\s*[:#-]?\s*)?[12]-\d{8}-\d{4}\b", "", text, flags=re.IGNORECASE)
 
-    # Clean double spaces
+    # Strip format instructions like (YYYY-MM-DD) or 'in YYYY-MM-DD format'
+    text = re.sub(r"\(?\b(?:in\s+)?Y{2,4}[-/ ]?M{1,2}[-/ ]?D{1,2}(?:\s*format)?\)?", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\(?\b(?:in\s+)?M{1,2}[-/ ]?D{1,2}[-/ ]?Y{2,4}(?:\s*format)?\)?", "", text, flags=re.IGNORECASE)
+
+    # Clean double spaces and space before punctuation
     text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\s+([?,.!])", r"\1", text)
     return text.strip()
 
 
