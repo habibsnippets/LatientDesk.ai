@@ -218,14 +218,38 @@ python pms.py
 
 ---
 
-## 🎮 Running the Application
+## ☁️ Deploy to Streamlit Community Cloud (Public Web Access)
+
+You can deploy LatientDesk.ai to **Streamlit Community Cloud** in under 60 seconds so anyone can use it over the web:
+
+1. **Push your code to GitHub**:
+   Ensure your repository (`habibsnippets/LatientDesk.ai`) is pushed with the latest `main` branch.
+2. **Deploy on Streamlit Cloud**:
+   - Go to [share.streamlit.io](https://share.streamlit.io/) and click **"New app"**.
+   - **Repository**: `habibsnippets/LatientDesk.ai`
+   - **Branch**: `main`
+   - **Main file path**: `app.py`
+   - Click **"Deploy!"**
+3. **Bring Your Own Key (BYOK)**:
+   - Anyone accessing your deployed link can paste their free **Groq API Key** (`gsk_...`) directly into the sidebar text field.
+   - *Optional:* You can also set a default key in Streamlit Cloud under **App Settings → Secrets**:
+     ```toml
+     GROQ_API_KEY = "gsk_your_default_key_here"
+     ```
+4. **Zero-Config Cloud Runtime**:
+   - The app automatically initializes and seeds `demo.db` with 200 open dental slots on first launch.
+   - Piper neural TTS weights are auto-fetched on demand from Hugging Face with text-fallback safety.
+
+---
+
+## 🎮 Running the Application Locally
 
 ### Option A: Streamlit Web Dashboard (Recommended)
 Launch the interactive web application featuring chat, in-browser audio recording, Piper TTS playback, calendar inspection, and the insurance test bench:
 ```bash
 streamlit run app.py
 ```
-Open your browser at `http://localhost:8501`.
+Open your browser at `http://localhost:8501`. Enter your Groq API Key in the left sidebar to start.
 
 ### Option B: Real-Time Streaming Voice Agent
 Run the full-duplex voice pipeline through your local microphone and speakers:

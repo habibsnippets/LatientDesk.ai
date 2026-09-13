@@ -68,20 +68,54 @@ st.markdown(
 
 
 def get_db():
-    return pms.connect(pms.DB_PATH)
+    """Connect to SQLite database; automatically initialize and seed if missing."""
+    needs_seed = not pms.DB_PATH.exists() or pms.DB_PATH.stat().st_size == 0
+    conn = pms.connect(pms.DB_PATH)
+    if needs_seed:
+        pms.init_schema(conn)
+        pms.seed(conn)
+    else:
+        cur = conn.cursor()
+        cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='providers'")
+        if not cur.fetchone():
+            pms.init_schema(conn)
+            pms.seed(conn)
+    return conn
 
 
 # -----------------------------------------------------------------------------
 # Speech Services (STT & TTS)
 # -----------------------------------------------------------------------------
 
-@st.cache_resource
+@st.cache_resource(show_spinner="Loading neural voice engine...")
 def get_piper_voice():
-    """Load local Piper TTS voice model once into memory."""
-    model_path = Path(__file__).resolve().parent / "voices" / "en_US-amy-medium.onnx"
-    config_path = Path(__file__).resolve().parent / "voices" / "en_US-amy-medium.onnx.json"
+    """Load local Piper TTS voice model once into memory.
+
+    If model weights are not present (e.g. on fresh cloud deployment),
+    fetches en_US-amy-medium from Hugging Face repository.
+    """
+    voices_dir = Path(__file__).resolve().parent / "voices"
+    voices_dir.mkdir(exist_ok=True)
+    model_path = voices_dir / "en_US-amy-medium.onnx"
+    config_path = voices_dir / "en_US-amy-medium.onnx.json"
+
+    if not model_path.exists() or not config_path.exists():
+        try:
+            import urllib.request
+            model_url = "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/amy/medium/en_US-amy-medium.onnx"
+            config_url = "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/amy/medium/en_US-amy-medium.onnx.json"
+            if not config_path.exists():
+                urllib.request.urlretrieve(config_url, str(config_path))
+            if not model_path.exists():
+                urllib.request.urlretrieve(model_url, str(model_path))
+        except Exception:
+            return None
+
     if model_path.exists() and config_path.exists():
-        return PiperVoice.load(str(model_path), config_path=str(config_path))
+        try:
+            return PiperVoice.load(str(model_path), config_path=str(config_path))
+        except Exception:
+            return None
     return None
 
 
@@ -186,6 +220,34 @@ with st.sidebar:
     st.caption("Autonomous Dental AI Receptionist")
 
     st.markdown("---")
+    st.subheader("🔑 Groq API Key")
+
+    env_key = os.environ.get("GROQ_API_KEY", "")
+    secrets_key = ""
+    try:
+        secrets_key = st.secrets.get("GROQ_API_KEY", "")
+    except Exception:
+        pass
+
+    default_key = st.session_state.get("user_groq_key") or secrets_key or env_key
+
+    groq_api_key = st.text_input(
+        "Enter Groq API Key:",
+        value=default_key,
+        type="password",
+        placeholder="gsk_...",
+        help="Paste your Groq API key. Get a free high-speed key at https://console.groq.com/keys",
+    )
+
+    if groq_api_key:
+        st.session_state.user_groq_key = groq_api_key
+        os.environ["GROQ_API_KEY"] = groq_api_key
+        st.success("API Key Active (Groq)", icon="✅")
+    else:
+        st.warning("⚠️ Enter your Groq API key above to start.", icon="⚠️")
+        st.markdown("[👉 Get a free Groq API key](https://console.groq.com/keys)")
+
+    st.markdown("---")
     st.subheader("🎙️ Voice & Audio Settings")
 
     enable_voice_out = st.toggle(
@@ -200,12 +262,6 @@ with st.sidebar:
         index=0,
         help="Groq high-speed tool-calling models.",
     )
-
-    has_key = bool(os.environ.get("GROQ_API_KEY"))
-    if has_key:
-        st.success("API Key Active (Groq)", icon="✅")
-    else:
-        st.error("GROQ_API_KEY not found in .env", icon="⚠️")
 
     st.markdown("---")
     st.subheader("💡 Quick Test Scenarios")
@@ -277,28 +333,43 @@ with tab_chat:
 
     # Audio input widget for speaking directly into the browser
     st.markdown("#### 🎙️ Voice Input")
-    recorded_audio = st.audio_input("Click the microphone to speak to the receptionist:")
+
+    if not groq_api_key:
+        st.info(
+            "🔑 **Please enter your Groq API Key in the left sidebar** to enable the dental receptionist! "
+            "Don't have one? You can generate a free, high-speed key at [console.groq.com/keys](https://console.groq.com/keys)."
+        )
+
+    recorded_audio = st.audio_input(
+        "Click the microphone to speak to the receptionist:",
+        disabled=not bool(groq_api_key),
+    )
 
     user_input = ""
     # Process audio if new recording detected
-    if recorded_audio is not None:
+    if recorded_audio is not None and groq_api_key:
         audio_bytes = recorded_audio.getvalue()
         audio_hash = hashlib.md5(audio_bytes).hexdigest()
         if audio_hash != st.session_state.last_processed_audio:
             st.session_state.last_processed_audio = audio_hash
             with st.spinner("Transcribing your voice with Groq Whisper..."):
-                key = os.environ.get("GROQ_API_KEY", "")
-                transcribed = transcribe_audio_groq(audio_bytes, key)
+                transcribed = transcribe_audio_groq(audio_bytes, groq_api_key)
                 if transcribed:
                     user_input = transcribed
 
     # Quick scenario button override
     if "quick_prompt" in st.session_state and st.session_state.quick_prompt:
-        user_input = st.session_state.quick_prompt
+        if not groq_api_key:
+            st.error("Please enter a Groq API Key in the sidebar first!")
+        else:
+            user_input = st.session_state.quick_prompt
         del st.session_state.quick_prompt
 
     # Text input box
-    typed_input = st.chat_input("Or type your message here...")
+    typed_input = st.chat_input(
+        "Or type your message here...",
+        disabled=not bool(groq_api_key),
+    )
     if typed_input:
         user_input = typed_input
 
@@ -329,7 +400,10 @@ with tab_chat:
                         st.session_state.messages,
                         conn,
                         model=model_choice,
+                        api_key=groq_api_key,
                     )
+                except Exception as exc:
+                    reply = f"I apologize, I ran into an issue connecting to the practice service: {exc}"
                 finally:
                     conn.close()
 
