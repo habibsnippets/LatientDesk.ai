@@ -31,6 +31,14 @@ from typing import Any
 # Suppress harmless HuggingFace warning about local PyTorch
 os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
 
+# Silence noisy ALSA soundcard warnings on Linux
+try:
+    import ctypes
+    _asound = ctypes.cdll.LoadLibrary("libasound.so.2")
+    _asound.snd_lib_error_set_handler(None)
+except Exception:
+    pass
+
 import pms
 import agent as core
 
