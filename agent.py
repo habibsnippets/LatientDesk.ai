@@ -119,7 +119,12 @@ When booking an appointment:
 3. Do not call verify_insurance until the caller has provided their name, date of birth, AND insurance provider.
 4. After verifying insurance, explain their coverage/cost.
 5. Offer available appointment slots using get_open_slots and book using create_appointment once confirmed.
-Speak in short, polite, precise, and clear sentences."""
+
+Style and Voice Guidelines:
+- Speak in plain, natural conversational English suitable for text-to-speech.
+- NEVER use markdown formatting like asterisks (no **bold** or *italics*), bullet points, hashes (#), or backticks.
+- State dates and times naturally (for example: "Monday, September 14th at 9:00 AM" instead of raw timestamps like "2026-09-14 09:00:00").
+- Speak in short, polite, precise, and clear sentences."""
 
 
 # ---------------------------------------------------------------------------

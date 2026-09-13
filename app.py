@@ -12,6 +12,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import sqlite3
 import wave
 from datetime import datetime
@@ -84,9 +85,47 @@ def get_piper_voice():
     return None
 
 
+def clean_text_for_speech(text: str) -> str:
+    """Sanitize text for natural speech synthesis.
+
+    Strips markdown formatting (asterisks, bullet points, hashes, backticks)
+    and converts raw ISO dates/datetimes into natural spoken phrases.
+    """
+    # Remove markdown bold/italics asterisks
+    text = re.sub(r"\*+", "", text)
+    # Remove markdown headers and list bullets
+    text = re.sub(r"^[#\-*]\s+", "", text, flags=re.MULTILINE)
+    # Remove backticks and symbols
+    text = text.replace("`", "").replace("~", "")
+
+    # Convert ISO datetimes like '2026-09-14 09:00:00' to 'September 14 at 9:00 AM'
+    def _replace_dt(m):
+        raw = m.group(0)
+        try:
+            dt = datetime.fromisoformat(raw)
+            return dt.strftime("%B %d at %I:%M %p").replace(" 0", " ")
+        except Exception:
+            return raw
+
+    text = re.sub(r"\b\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2})?\b", _replace_dt, text)
+
+    # Convert ISO dates like '2026-09-14' to 'September 14'
+    def _replace_date(m):
+        raw = m.group(0)
+        try:
+            d = datetime.strptime(raw, "%Y-%m-%d")
+            return d.strftime("%B %d").replace(" 0", " ")
+        except Exception:
+            return raw
+
+    text = re.sub(r"\b\d{4}-\d{2}-\d{2}\b", _replace_date, text)
+    return text.strip()
+
+
 def synthesize_speech(text: str) -> bytes | None:
     """Synthesize text to spoken 16-bit PCM WAV using Piper TTS."""
-    if not text or not text.strip():
+    clean_text = clean_text_for_speech(text)
+    if not clean_text:
         return None
     try:
         voice = get_piper_voice()
@@ -97,7 +136,7 @@ def synthesize_speech(text: str) -> bytes | None:
             wav_file.setnchannels(1)
             wav_file.setsampwidth(2)
             wav_file.setframerate(voice.config.sample_rate)
-            for chunk in voice.synthesize(text):
+            for chunk in voice.synthesize(clean_text):
                 audio_int16 = (chunk.audio_float_array * 32767).astype(np.int16)
                 wav_file.writeframes(audio_int16.tobytes())
         buf.seek(0)
@@ -265,11 +304,6 @@ with tab_chat:
                 st.write(msg["content"])
                 if msg.get("audio"):
                     st.audio(msg["audio"], format="audio/wav")
-                if msg.get("tools"):
-                    with st.expander("🔧 Tools Executed", expanded=False):
-                        for t in msg["tools"]:
-                            st.markdown(f"**Tool:** `{t['name']}`")
-                            st.json(t["result"])
 
     # Process new user input (from voice or text)
     if user_input:
@@ -278,23 +312,8 @@ with tab_chat:
             st.write(user_input)
 
         with st.chat_message("assistant", avatar="🦷"):
-            with st.spinner("Receptionist is checking PMS calendar & insurance..."):
+            with st.spinner("Receptionist is checking calendar & insurance..."):
                 conn = get_db()
-                tools_used = []
-
-                # Intercept tool calls to show in UI
-                original_exec = agent.execute_tool
-
-                def _intercept_tool(name, args, db_conn):
-                    res = original_exec(name, args, db_conn)
-                    try:
-                        parsed = json.loads(res)
-                    except Exception:
-                        parsed = res
-                    tools_used.append({"name": name, "args": args, "result": parsed})
-                    return res
-
-                agent.execute_tool = _intercept_tool
                 try:
                     reply, st.session_state.messages = agent.agent_reply(
                         user_input,
@@ -303,7 +322,6 @@ with tab_chat:
                         model=model_choice,
                     )
                 finally:
-                    agent.execute_tool = original_exec
                     conn.close()
 
                 st.write(reply)
@@ -316,14 +334,8 @@ with tab_chat:
                         if reply_audio:
                             st.audio(reply_audio, format="audio/wav", autoplay=True)
 
-                if tools_used:
-                    with st.expander("🔧 Tools Executed", expanded=True):
-                        for t in tools_used:
-                            st.markdown(f"**Tool:** `{t['name']}`")
-                            st.json(t["result"])
-
                 st.session_state.chat_history.append(
-                    {"role": "assistant", "content": reply, "tools": tools_used, "audio": reply_audio}
+                    {"role": "assistant", "content": reply, "audio": reply_audio}
                 )
 
 # -----------------------------------------------------------------------------
