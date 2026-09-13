@@ -1,0 +1,185 @@
+# LatientDesk.ai caller scenarios — plain text, one scenario per block.
+#
+# FORMAT
+#   Lines starting with "## " begin a new scenario (the rest of the line is a
+#   short label). Every non-empty line after it is ONE caller utterance, sent
+#   to the agent in order. Lines starting with "#" (single hash) are comments
+#   and are ignored. Blank lines separate utterances visually and are ignored.
+#
+# The agent replies after each utterance, exactly like the text CLI in
+# agent.py. Each dialogue is scored on three booleans:
+#   1. booked            - create_appointment succeeded this dialogue
+#   2. verified_before_quote - verify_insurance ran before any price was cited
+#   3. quoted_benefit_matches_fixture - the price/benefit stated in the agent's
+#      text matches what the patient's fixture actually says
+#
+# The three hand-written fixture patients (fill them in insurance.py):
+#   Maya Okafor  1988-03-14  ABC Dental       -> fully_covered   ($0 ded, 100%)
+#   Liam Barnes  1992-07-02  Delta Prime      -> deductible_80   ($50 ded, 80%)
+#   Sofia Reyes  1995-11-27  Guardian Shield  -> filling_wait    (6-mo filling wait)
+#
+# ===========================================================================
+# == SCENARIO SLOTS 1-20 (hand-written by the user — do not generate)      ==
+# == Replace the placeholder lines below with real caller utterances.     ==
+# ===========================================================================
+
+## Scenario 1: Maya Okafor books a 30 min checkup with Dr. Chen
+Hi, I'd like to schedule a checkup please.
+With Dr. Chen if possible.
+My name is Maya Okafor.
+March 14th, 1988.
+I have ABC Dental insurance. Before we pick a time, can you tell me what a checkup would cost me?
+That sounds great. Do you have anything in the morning next week?
+That works. My phone number is 503-555-0142.
+Yes, please book that for me.
+
+## Scenario 2: Liam Barnes books a 60 min filling and asks about cost
+Hello, I need to get a filling done.
+Liam Barnes.
+My date of birth is July 2nd, 1992.
+I'm with Delta Prime for insurance. How much will a filling run me out of pocket?
+Okay, I can work with that. What does Dr. Chen have available this week?
+An afternoon slot would be better for me.
+Sure, let's go with that one. My number is 503-555-0199.
+Yes, confirmed.
+
+## Scenario 3: Sofia Reyes books a 45 min cleaning
+Hi there, I need to schedule a teeth cleaning.
+Sofia Reyes.
+November 27, 1995.
+Guardian Shield is my insurance. How much will the cleaning cost?
+Sounds good. Any openings with Dr. Chen next week?
+The earlier the better, morning please.
+My phone number is 503-555-0177.
+Yes, book it.
+
+## Scenario 4: Maya Okafor books a 45 min cleaning asking about coverage
+Good morning. I want to book a cleaning appointment.
+Maya Okafor, date of birth 03/14/1988.
+I have ABC Dental. What would a cleaning cost with my plan?
+Perfect. What mornings does Dr. Chen have open this week?
+That one is fine.
+My number is 503-555-0142.
+Yes, please book and confirm the appointment, thank you.
+
+## Scenario 5: Sofia Reyes asks about a filling then declines due to waiting period (no book)
+Hi, I was hoping to schedule a filling.
+My name is Sofia Reyes, born November 27, 1995.
+My insurance is Guardian Shield. What would the filling cost me?
+Six months? Wow, I didn't realize there was a waiting period. When does the waiting period end exactly?
+Hmm, I think I'll hold off and call back once the waiting period is over. Thanks for letting me know.
+
+## Scenario 6: Caller asks about out-of-network insurance (no book)
+Hi, do you accept MetLife dental insurance?
+What about Aetna?
+Okay, which insurance plans do you accept?
+Got it. I'll check with my employer about switching plans. Thanks.
+
+## Scenario 7: Liam Barnes books a 60 min extraction
+Hi, I need to have a tooth pulled. Can I schedule an extraction?
+My name is Liam Barnes, DOB 07/02/1992.
+Delta Prime is my insurance carrier. What's my out of pocket going to look like for an extraction?
+Alright, let's do it. Any availability with Dr. Chen later this week?
+That works for me. Phone number is 503-555-0199.
+Yes please, go ahead and book it.
+
+## Scenario 8: Caller asks about pricing with no insurance and declines (no book)
+Hello, I don't have any dental insurance. How much would a basic cleaning cost out of pocket?
+And what about a filling?
+That's more than I was expecting. I'll need to think about it and call back.
+
+## Scenario 9: Maya Okafor books a 60 min filling
+Hi, I need a filling appointment with Dr. Chen.
+Maya Okafor.
+My birthday is March 14, 1988.
+I'm insured through ABC Dental. Can you check what my cost would be for a filling?
+Excellent. What's available next week in the afternoon?
+Let's go with that. My cell is 503-555-0142.
+Confirmed, thank you.
+
+## Scenario 10: Caller asks about provider specialties and hangs up (no book)
+Hi, can you tell me a bit about your dentists? What are their specialties?
+Does Dr. Webb do general cleanings too, or only orthodontics?
+And what are your office hours?
+Okay, thanks for the info. I'll call back if I decide to make an appointment.
+
+## Scenario 11: Sofia Reyes books a 30 min checkup with Dr. Chen
+Hello, I'd like to book a checkup appointment.
+Sofia Reyes, date of birth 11/27/1995.
+I have Guardian Shield. How much will a checkup cost me?
+Great. Does Dr. Chen have availability this week?
+Morning would be ideal.
+My phone number is 503-555-0177.
+Yes, let's book it.
+
+## Scenario 12: Liam Barnes books a 30 min checkup
+Hey, I want to schedule a routine checkup.
+Liam Barnes, born July 2, 1992.
+My insurance is through Delta Prime. What's the cost for a checkup with my coverage?
+Okay that's reasonable. What does Dr. Chen have open?
+Anything in the afternoon works.
+555-0199.
+Go ahead and book that, thanks.
+
+## Scenario 13: Caller wants a weekend appointment (no book)
+Hi, I work Monday through Friday. Do you have any Saturday appointments available?
+What about Sunday?
+That's tough. I really can't get away during the week. I'll figure something out and call back.
+
+## Scenario 14: Maya Okafor books a 90 min root canal
+Hi, my dentist referred me for a root canal. I'd like to schedule one.
+My name is Maya Okafor, DOB March 14, 1988.
+I have ABC Dental insurance. I'm a little worried about the cost — can you check what I'd owe for a root canal?
+Oh wow, that's a relief. What's the soonest Dr. Chen can see me?
+I'll take whatever is available first.
+My number is 503-555-0142.
+Yes, please book it.
+
+## Scenario 15: Sofia Reyes tries to book a filling but waiting period blocks it (no book)
+I need to schedule a filling please.
+Sofia Reyes.
+My birthday is November 27, 1995.
+I'm on Guardian Shield. What would the cost be?
+A waiting period? How long is it?
+That's frustrating. I'll wait it out and call back in a few months then. Bye.
+
+## Scenario 16: Liam Barnes books a 45 min cleaning
+Hello, I need a cleaning.
+Liam Barnes.
+07/02/1992.
+I have Delta Prime. What's my copay or cost for a cleaning?
+That works for me. Any morning slots with Dr. Chen this week?
+Perfect, let's take that one. My number is 503-555-0199.
+Confirmed.
+
+## Scenario 17: Caller asks about root canal cost without insurance and declines (no book)
+Hi, I don't have insurance right now. How much would a root canal cost at your office?
+And is there any kind of payment plan available?
+That's a lot. I'm going to shop around a bit. Thanks for the information.
+
+## Scenario 18: Maya Okafor books a 60 min extraction
+Hi, I need to schedule a tooth extraction.
+Maya Okafor, March 14, 1988.
+My insurance is ABC Dental. What will an extraction cost me with my coverage?
+Great. Any openings with Dr. Chen?
+Afternoon works best for me.
+503-555-0142.
+Book it, thanks.
+
+## Scenario 19: Liam Barnes books a 90 min root canal and asks about cost
+Hello, I've been told I need a root canal.
+Liam Barnes, date of birth July 2nd, 1992.
+I'm covered under Delta Prime. Can you tell me what the root canal will cost me after insurance?
+Alright, I expected it'd be something. Let's get it scheduled. What's the earliest availability?
+That's fine.
+Phone number is 503-555-0199.
+Yes, book the appointment.
+
+## Scenario 20: Sofia Reyes books a 45 min cleaning with Dr. Chen asking about cost
+Hi, I'd like to get a cleaning scheduled.
+My name is Sofia Reyes, born November 27, 1995.
+I'm with Guardian Shield. Just want to make sure — what's the cost for a cleaning under my plan?
+That's great. What does Dr. Chen have available?
+Morning works better for me.
+My number is 503-555-0177.
+Yes please, confirm the booking.

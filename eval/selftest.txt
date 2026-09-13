@@ -1,0 +1,13 @@
+# Selftest scenarios for the evaluation harness (plumbing check, not quality).
+# These exercise: verify-before-quote, booking, and a no-booking dialogue.
+
+## selftest: fully covered books after verify (mock LLM path)
+Hi, I'm Maya Okafor, born 1988-03-14, I need a checkup.
+What does it cost?
+Yes please, book it.
+
+## selftest: question only, no booking expected (no book)
+Do you take Guardian Shield insurance?
+
+## selftest: unknown patient asks to book (no book)
+Hi, I'm Jane Doe, born 1990-01-01. Book me tomorrow.

@@ -1,0 +1,25 @@
+# LatientDesk.ai voice pipeline (Pipecat STT -> LLM -> TTS)
+#
+# Install:
+#   python3 -m venv .venv && .venv/bin/pip install -r requirements-voice.txt
+#
+# NOTE (PyAudio on machines with libportaudio but no dev headers):
+#   PyAudio needs portaudio.h and libportaudio.so to build. If you lack sudo:
+#     mkdir -p .build-include .build-lib
+#     curl -sL -o .build-include/portaudio.h \
+#       https://raw.githubusercontent.com/PortAudio/portaudio/master/include/portaudio.h
+#     ln -sf /lib64/libportaudio.so.2 .build-lib/libportaudio.so   # adapt path via `ldconfig -p | grep portaudio`
+#     CFLAGS="-I$PWD/.build-include" LDFLAGS="-L$PWD/.build-lib" .venv/bin/pip install pyaudio
+#
+# NOTE (Piper voice download): piper-tts's downloader can be very slow. If
+# en_US-amy-medium stalls, pre-fetch the model with curl (fast):
+#   curl -sL -o voices/en_US-amy-medium.onnx \
+#     https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/amy/medium/en_US-amy-medium.onnx
+#   curl -sL -o voices/en_US-amy-medium.onnx.json \
+#     https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/amy/medium/en_US-amy-medium.onnx.json
+
+pipecat-ai[silero,local,piper,groq]==0.0.108
+websockets>=12
+piper-tts>=1.2.0
+requests>=2.31
+loguru>=0.7

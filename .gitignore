@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual Environment
+.venv/
+env/
+venv/
+ENV/
+
+# Secrets & Environment
+.env
+
+# Database
+demo.db
+
+# Local build artifacts
+.build-include/
+.build-lib/
+
+# Piper TTS weights (60MB+, auto-downloaded by Piper)
+voices/*.onnx
+
+# OS & Editor files
+.DS_Store
+.vscode/
+.idea/
