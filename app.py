@@ -118,7 +118,11 @@ def clean_text_for_speech(text: str) -> str:
         except Exception:
             return raw
 
-    text = re.sub(r"\b\d{4}-\d{2}-\d{2}\b", _replace_date, text)
+    # Remove raw database slot IDs like '1-20260914-0900'
+    text = re.sub(r"\b(?:slot\s*(?:id)?\s*[:#-]?\s*)?[12]-\d{8}-\d{4}\b", "", text, flags=re.IGNORECASE)
+
+    # Clean double spaces
+    text = re.sub(r"[ \t]+", " ", text)
     return text.strip()
 
 
