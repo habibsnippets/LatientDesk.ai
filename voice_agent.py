@@ -28,6 +28,9 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+# Suppress harmless HuggingFace warning about local PyTorch
+os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
+
 import pms
 import agent as core
 
@@ -205,11 +208,15 @@ def main() -> None:
         n = pms.seed(conn)
         print(f"[db] seeded {n} open slots at {args.db}")
 
-    try:
+    async def _run() -> None:
         task = build_task(conn, args.model, args.voice, api_key)
         print(f"[voice] STT={STT_MODEL} (Groq) | LLM={args.model} (Groq) | TTS=Piper/{args.voice}")
         print("[voice] Speak when ready. Ctrl-C to exit.")
-        asyncio.run(PipelineRunner().run(task))
+        runner = PipelineRunner()
+        await runner.run(task)
+
+    try:
+        asyncio.run(_run())
     except KeyboardInterrupt:
         print("\n[voice] goodbye")
     except Exception as exc:  # noqa: BLE001 — surface mic/device errors readably
