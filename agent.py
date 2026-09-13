@@ -87,6 +87,15 @@ def groq_chat(
             f"Groq does not know model {model!r} (404). "
             f"Known tool-calling models: {sorted(MODELS_WITH_TOOLS)}"
         )
+    if resp.status_code == 400 and "tool_use_failed" in resp.text:
+        # Server-side tool validation failed; retry without tools to continue conversation gracefully
+        resp = requests.post(
+            GROQ_CHAT_URL,
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            json={"model": model, "messages": messages},
+            timeout=timeout,
+        )
+
     if resp.status_code == 429:
         raise GroqError("Groq rate limit hit (429); slow down or retry shortly.")
     if resp.status_code != 200:
@@ -103,10 +112,14 @@ def groq_chat(
 # ---------------------------------------------------------------------------
 
 SYSTEM_PROMPT = """You are the front desk receptionist at a dental practice. \
-Greet the caller, find out what they need, collect details like name, DOB, \
-phone, check their insurance using the verify_insurance tool before \
-confirming the price and then book the patient using the book_appointment \
-tool. Speak in short precise and clear sentences."""
+Greet the caller and find out what they need. \
+When booking an appointment:
+1. Collect the patient's full name, date of birth, and phone number.
+2. Ask for their dental insurance provider (accepted: ABC Dental, Delta Prime, Guardian Shield).
+3. Do not call verify_insurance until the caller has provided their name, date of birth, AND insurance provider.
+4. After verifying insurance, explain their coverage/cost.
+5. Offer available appointment slots using get_open_slots and book using create_appointment once confirmed.
+Speak in short, polite, precise, and clear sentences."""
 
 
 # ---------------------------------------------------------------------------
@@ -207,8 +220,7 @@ TOOLS: list[dict[str, Any]] = [
                     "dob": {"type": "string", "description": "Patient date of birth, YYYY-MM-DD"},
                     "payer": {
                         "type": "string",
-                        "enum": ["ABC Dental", "Delta Prime", "Guardian Shield"],
-                        "description": "Insurance payer name",
+                        "description": "Insurance payer name (accepted: ABC Dental, Delta Prime, Guardian Shield)",
                     },
                     "service_date": {
                         "type": "string",
