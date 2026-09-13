@@ -65,10 +65,10 @@ def groq_chat(
     api_key: str | None = None,
     timeout: float = 60.0,
 ) -> dict[str, Any]:
-    """One chat-completion round-trip. Returns the full message dict."""
-    key = api_key or os.environ.get("GROQ_API_KEY")
+    raw_key = api_key or os.environ.get("GROQ_API_KEY")
+    key = raw_key.strip().strip("'\"").strip() if raw_key else ""
     if not key:
-        raise GroqError("GROQ_API_KEY is not set in the environment")
+        raise GroqError("GROQ_API_KEY is not set or is empty")
 
     payload: dict[str, Any] = {"model": model, "messages": messages}
     if tools:

@@ -193,16 +193,26 @@ def transcribe_audio_groq(audio_bytes: bytes, api_key: str) -> str:
     """Transcribe browser microphone audio with Groq Whisper."""
     if not audio_bytes:
         return ""
+    clean_key = (api_key or "").strip().strip("'\"").strip()
+    if not clean_key:
+        st.error("Missing Groq API key for speech transcription.")
+        return ""
     try:
         r = requests.post(
             "https://api.groq.com/openai/v1/audio/transcriptions",
-            headers={"Authorization": f"Bearer {api_key}"},
+            headers={"Authorization": f"Bearer {clean_key}"},
             files={"file": ("caller_speech.wav", audio_bytes, "audio/wav")},
             data={"model": "whisper-large-v3-turbo"},
             timeout=30.0,
         )
         if r.status_code == 200:
             return r.json().get("text", "").strip()
+        elif r.status_code == 401:
+            st.error(
+                "❌ Groq rejected your API Key (401: Invalid API Key). "
+                "Please verify that your key is active at https://console.groq.com/keys and re-enter it in the sidebar."
+            )
+            return ""
         else:
             st.error(f"Whisper transcription failed ({r.status_code}): {r.text[:200]}")
             return ""
@@ -230,8 +240,9 @@ with st.sidebar:
         pass
 
     default_key = st.session_state.get("user_groq_key") or secrets_key or env_key
+    default_key = default_key.strip().strip("'\"").strip() if default_key else ""
 
-    groq_api_key = st.text_input(
+    raw_key = st.text_input(
         "Enter Groq API Key:",
         value=default_key,
         type="password",
@@ -239,10 +250,15 @@ with st.sidebar:
         help="Paste your Groq API key. Get a free high-speed key at https://console.groq.com/keys",
     )
 
+    groq_api_key = raw_key.strip().strip("'\"").strip() if raw_key else ""
+
     if groq_api_key:
         st.session_state.user_groq_key = groq_api_key
         os.environ["GROQ_API_KEY"] = groq_api_key
-        st.success("API Key Active (Groq)", icon="✅")
+        if not groq_api_key.startswith("gsk_"):
+            st.warning("⚠️ Key does not start with 'gsk_'. Please ensure you copied the full key from console.groq.com.", icon="⚠️")
+        else:
+            st.success("API Key Active (Groq)", icon="✅")
     else:
         st.warning("⚠️ Enter your Groq API key above to start.", icon="⚠️")
         st.markdown("[👉 Get a free Groq API key](https://console.groq.com/keys)")
