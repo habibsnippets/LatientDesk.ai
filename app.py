@@ -1,19 +1,27 @@
 """LatientDesk.ai — Streamlit Interactive Web Application.
 
 Provides a full GUI for:
-1. Live Receptionist Chat with visible tool-call tracing.
-2. Practice Management System (PMS) live schedule and booked appointments.
-3. Insurance verification playground (mock 270/271).
+1. Live Receptionist Voice & Text Chat with visible tool-call tracing.
+2. In-browser audio input (microphone) -> Groq Whisper STT.
+3. Spoken audio responses powered by local Piper TTS (Amy voice).
+4. Practice Management System (PMS) live schedule and booked appointments.
+5. Insurance verification playground (mock 270/271).
 """
 
+import hashlib
+import io
 import json
 import os
 import sqlite3
+import wave
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
+import requests
 import streamlit as st
+from piper.voice import PiperVoice
 
 import agent
 import insurance
@@ -40,13 +48,17 @@ st.markdown(
     .sub-title {
         font-size: 1.05rem;
         color: #4B5563;
-        margin-bottom: 1.5rem;
+        margin-bottom: 1.2rem;
     }
-    .metric-card {
-        background-color: #F3F4F6;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        border-left: 4px solid #3B82F6;
+    .voice-badge {
+        background-color: #E0E7FF;
+        color: #3730A3;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 9999px;
+        font-size: 0.82rem;
+        display: inline-block;
+        margin-bottom: 1rem;
     }
     </style>
     """,
@@ -59,6 +71,65 @@ def get_db():
 
 
 # -----------------------------------------------------------------------------
+# Speech Services (STT & TTS)
+# -----------------------------------------------------------------------------
+
+@st.cache_resource
+def get_piper_voice():
+    """Load local Piper TTS voice model once into memory."""
+    model_path = Path(__file__).resolve().parent / "voices" / "en_US-amy-medium.onnx"
+    config_path = Path(__file__).resolve().parent / "voices" / "en_US-amy-medium.onnx.json"
+    if model_path.exists() and config_path.exists():
+        return PiperVoice.load(str(model_path), config_path=str(config_path))
+    return None
+
+
+def synthesize_speech(text: str) -> bytes | None:
+    """Synthesize text to spoken 16-bit PCM WAV using Piper TTS."""
+    if not text or not text.strip():
+        return None
+    try:
+        voice = get_piper_voice()
+        if not voice:
+            return None
+        buf = io.BytesIO()
+        with wave.open(buf, "wb") as wav_file:
+            wav_file.setnchannels(1)
+            wav_file.setsampwidth(2)
+            wav_file.setframerate(voice.config.sample_rate)
+            for chunk in voice.synthesize(text):
+                audio_int16 = (chunk.audio_float_array * 32767).astype(np.int16)
+                wav_file.writeframes(audio_int16.tobytes())
+        buf.seek(0)
+        return buf.getvalue()
+    except Exception as exc:
+        st.warning(f"Voice synthesis note: {exc}")
+        return None
+
+
+def transcribe_audio_groq(audio_bytes: bytes, api_key: str) -> str:
+    """Transcribe browser microphone audio with Groq Whisper."""
+    if not audio_bytes:
+        return ""
+    try:
+        r = requests.post(
+            "https://api.groq.com/openai/v1/audio/transcriptions",
+            headers={"Authorization": f"Bearer {api_key}"},
+            files={"file": ("caller_speech.wav", audio_bytes, "audio/wav")},
+            data={"model": "whisper-large-v3-turbo"},
+            timeout=30.0,
+        )
+        if r.status_code == 200:
+            return r.json().get("text", "").strip()
+        else:
+            st.error(f"Whisper transcription failed ({r.status_code}): {r.text[:200]}")
+            return ""
+    except Exception as exc:
+        st.error(f"Speech transcription error: {exc}")
+        return ""
+
+
+# -----------------------------------------------------------------------------
 # Sidebar Configuration
 # -----------------------------------------------------------------------------
 with st.sidebar:
@@ -67,7 +138,13 @@ with st.sidebar:
     st.caption("Autonomous Dental AI Receptionist")
 
     st.markdown("---")
-    st.subheader("⚙️ Settings")
+    st.subheader("🎙️ Voice & Audio Settings")
+
+    enable_voice_out = st.toggle(
+        "🔊 Voice Responses (TTS)",
+        value=True,
+        help="Use Piper TTS (Amy voice) to read receptionist replies aloud.",
+    )
 
     model_choice = st.selectbox(
         "LLM Model",
@@ -113,34 +190,72 @@ with st.sidebar:
     if st.button("🗑️ Clear Chat History"):
         st.session_state.messages = []
         st.session_state.chat_history = []
+        st.session_state.last_processed_audio = ""
         st.rerun()
 
 # -----------------------------------------------------------------------------
 # Main Navigation Tabs
 # -----------------------------------------------------------------------------
 tab_chat, tab_pms, tab_insurance = st.tabs(
-    ["💬 AI Receptionist Chat", "📅 PMS Calendar & Appointments", "🛡️ Insurance 270/271 Inspector"]
+    ["🎙️ Live Receptionist (Voice & Text)", "📅 PMS Calendar & Appointments", "🛡️ Insurance 270/271 Inspector"]
 )
 
 # -----------------------------------------------------------------------------
-# Tab 1: Live Chat Interface
+# Tab 1: Live Voice & Text Receptionist
 # -----------------------------------------------------------------------------
 with tab_chat:
     st.markdown('<div class="main-title">Dental Front Desk Receptionist</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="sub-title">Chat with LatientDesk.ai in real time. The receptionist checks calendar availability, verifies insurance, and books appointments.</div>',
+        '<span class="voice-badge">🎙️ Voice Mode Active</span> '
+        '<span style="color:#6B7280; font-size: 0.95rem;">Speak with your microphone or type below. LatientDesk.ai verifies insurance, checks availability, and books appointments.</span>',
         unsafe_allow_html=True,
     )
 
     if "messages" not in st.session_state:
-        st.session_state.messages = []  # Internal raw LLM history
+        st.session_state.messages = []  # Raw LLM message history
 
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = [
-            {"role": "assistant", "content": "Hello! Welcome to our dental clinic. How can I assist you today?"}
+            {
+                "role": "assistant",
+                "content": "Hello! Welcome to our dental clinic. How can I help you today?",
+                "tools": [],
+                "audio": None,
+            }
         ]
 
-    # Render previous chat history
+    if "last_processed_audio" not in st.session_state:
+        st.session_state.last_processed_audio = ""
+
+    # Audio input widget for speaking directly into the browser
+    st.markdown("#### 🎙️ Voice Input")
+    recorded_audio = st.audio_input("Click the microphone to speak to the receptionist:")
+
+    user_input = ""
+    # Process audio if new recording detected
+    if recorded_audio is not None:
+        audio_bytes = recorded_audio.getvalue()
+        audio_hash = hashlib.md5(audio_bytes).hexdigest()
+        if audio_hash != st.session_state.last_processed_audio:
+            st.session_state.last_processed_audio = audio_hash
+            with st.spinner("Transcribing your voice with Groq Whisper..."):
+                key = os.environ.get("GROQ_API_KEY", "")
+                transcribed = transcribe_audio_groq(audio_bytes, key)
+                if transcribed:
+                    user_input = transcribed
+
+    # Quick scenario button override
+    if "quick_prompt" in st.session_state and st.session_state.quick_prompt:
+        user_input = st.session_state.quick_prompt
+        del st.session_state.quick_prompt
+
+    # Text input box
+    typed_input = st.chat_input("Or type your message here...")
+    if typed_input:
+        user_input = typed_input
+
+    # Render previous conversation history
+    st.markdown("---")
     for msg in st.session_state.chat_history:
         if msg["role"] == "user":
             with st.chat_message("user", avatar="👤"):
@@ -148,31 +263,26 @@ with tab_chat:
         else:
             with st.chat_message("assistant", avatar="🦷"):
                 st.write(msg["content"])
+                if msg.get("audio"):
+                    st.audio(msg["audio"], format="audio/wav")
                 if msg.get("tools"):
                     with st.expander("🔧 Tools Executed", expanded=False):
                         for t in msg["tools"]:
                             st.markdown(f"**Tool:** `{t['name']}`")
                             st.json(t["result"])
 
-    # Handle quick scenario or chat input
-    user_input = st.chat_input("Say something to the receptionist...")
-    if "quick_prompt" in st.session_state and st.session_state.quick_prompt:
-        user_input = st.session_state.quick_prompt
-        del st.session_state.quick_prompt
-
+    # Process new user input (from voice or text)
     if user_input:
-        # Show user message
         st.session_state.chat_history.append({"role": "user", "content": user_input})
         with st.chat_message("user", avatar="👤"):
             st.write(user_input)
 
-        # Generate agent reply
         with st.chat_message("assistant", avatar="🦷"):
-            with st.spinner("Receptionist is thinking and checking systems..."):
+            with st.spinner("Receptionist is checking PMS calendar & insurance..."):
                 conn = get_db()
                 tools_used = []
 
-                # Intercept tool executions to display in UI
+                # Intercept tool calls to show in UI
                 original_exec = agent.execute_tool
 
                 def _intercept_tool(name, args, db_conn):
@@ -197,6 +307,15 @@ with tab_chat:
                     conn.close()
 
                 st.write(reply)
+
+                # Generate speech response if enabled
+                reply_audio = None
+                if enable_voice_out:
+                    with st.spinner("Generating voice response (Piper TTS)..."):
+                        reply_audio = synthesize_speech(reply)
+                        if reply_audio:
+                            st.audio(reply_audio, format="audio/wav", autoplay=True)
+
                 if tools_used:
                     with st.expander("🔧 Tools Executed", expanded=True):
                         for t in tools_used:
@@ -204,7 +323,7 @@ with tab_chat:
                             st.json(t["result"])
 
                 st.session_state.chat_history.append(
-                    {"role": "assistant", "content": reply, "tools": tools_used}
+                    {"role": "assistant", "content": reply, "tools": tools_used, "audio": reply_audio}
                 )
 
 # -----------------------------------------------------------------------------
@@ -216,7 +335,6 @@ with tab_pms:
 
     conn = get_db()
     try:
-        # Metrics
         total_booked = conn.execute("SELECT COUNT(*) FROM appointments WHERE status = 'booked'").fetchone()[0]
         total_open = conn.execute("SELECT COUNT(*) FROM appointments WHERE status = 'open'").fetchone()[0]
         total_patients = conn.execute("SELECT COUNT(*) FROM patients").fetchone()[0]
